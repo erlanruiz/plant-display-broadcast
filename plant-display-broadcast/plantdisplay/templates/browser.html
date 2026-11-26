@@ -1,0 +1,167 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Virtual browser — {{ tv_name }}</title>
+<style>
+:root{--bg:#0f1319;--panel:#161b23;--line:#232b36;--fg:#e7ecf3;--mut:#8b99ac;
+      --acc:#ffb454;--ok:#5fd38d;--bad:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+     font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:10px 14px;
+       background:var(--panel);border-bottom:1px solid var(--line);
+       position:sticky;top:0;z-index:5;flex-wrap:wrap}
+h1{font-size:14px;margin:0;letter-spacing:.06em;text-transform:uppercase}
+.mut{color:var(--mut)}
+input[type=text]{background:#0d1117;border:1px solid var(--line);color:var(--fg);
+  border-radius:7px;padding:7px 9px;font:inherit;min-width:280px;flex:1}
+button{background:#222a35;color:var(--fg);border:1px solid var(--line);
+  border-radius:7px;padding:7px 11px;font:inherit;cursor:pointer}
+button:hover{border-color:#3a4757}
+button.primary{background:var(--acc);color:#20160a;border-color:var(--acc);font-weight:600}
+button.ok{background:var(--ok);color:#0b2016;border-color:var(--ok);font-weight:700}
+button.bad{background:transparent;color:var(--bad);border-color:#4a2530}
+.wrap{padding:14px;display:flex;flex-direction:column;gap:10px;align-items:center}
+.screen{position:relative;border:1px solid var(--line);border-radius:10px;
+  overflow:hidden;background:#000;max-width:100%}
+.screen img{display:block;width:min(1280px,95vw);height:auto;cursor:crosshair}
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:9px 12px;width:min(1280px,95vw)}
+.hint{color:var(--mut);font-size:12px;max-width:min(1280px,95vw)}
+.tag{font-size:12px;padding:2px 7px;border-radius:99px;border:1px solid var(--line)}
+#status{min-height:18px;font-size:12px}
+</style></head><body>
+
+<header>
+  <h1>Virtual browser</h1>
+  <span class="tag">{{ tv_name }} · {{ ip }}</span>
+  <input type="text" id="url" value="{{ url }}" placeholder="https://…">
+  <button onclick="go()">Go</button>
+  <button onclick="act('back')">← Back</button>
+  <button onclick="act('reload')">⟳ Reload</button>
+  <span id="status" class="mut"></span>
+</header>
+
+<div class="wrap">
+  <div class="screen">
+    <img id="shot" alt="virtual browser" onclick="clickAt(event)">
+  </div>
+
+  <div class="bar">
+    <span class="mut">Scroll</span>
+    <button onclick="act('scroll',{dy:-600})">▲▲</button>
+    <button onclick="act('scroll',{dy:-200})">▲</button>
+    <button onclick="act('scroll',{dy:200})">▼</button>
+    <button onclick="act('scroll',{dy:600})">▼▼</button>
+    <span class="mut" style="margin-left:10px">Zoom</span>
+    <button onclick="zoomBy(1/1.25)">➖</button>
+    <span id="zoomLbl" class="tag">100%</span>
+    <button onclick="zoomBy(1.25)">➕</button>
+    <button onclick="setZoom(1)">Reset</button>
+  </div>
+
+  <div class="bar">
+    <input type="text" id="typing" placeholder="Type into the page (click a field first)…">
+    <button onclick="typeText()">Type</button>
+    <button onclick="act('key',{key:'Enter'})">Enter</button>
+    <button onclick="act('key',{key:'Tab'})">Tab</button>
+    <button onclick="signin()">🔐 Sign in on host</button>
+  </div>
+
+  <div class="bar">
+    <button class="ok" onclick="commit()">✓ OK — stream this to the TV</button>
+    <button class="bad" onclick="window.close()">Cancel</button>
+  </div>
+
+  <div class="hint">
+    Click anywhere on the image to click that spot in the page. Scroll and zoom
+    to frame what you want, then press <b>OK</b> — the TV starts showing this
+    view. Re-opening this window resumes exactly where you left off, and
+    cookies/sign-ins are kept until you change the URL or untick "use URL".
+    <br><br>
+    <b>Signing in:</b> use <b>🔐 Sign in on host</b> — it opens this same
+    browser profile <i>visibly on the Plant Display host</i> so you type your
+    password directly into the real browser (reach the desktop with the admin
+    page's <b>Remote control</b> button). Your password never travels through
+    Plant Display, and the session is remembered afterwards.
+  </div>
+</div>
+
+<script>
+const IP="{{ ip }}";
+const $=id=>document.getElementById(id);
+let zoom=1;
+
+function setStatus(m,bad){$("status").textContent=m;
+  $("status").style.color=bad?"var(--bad)":"var(--mut)";}
+
+async function api(url,body){
+  const c=new AbortController();const t=setTimeout(()=>c.abort(),25000);
+  try{
+    const r=await fetch(url,{method:body?"POST":"GET",
+      headers:{"Content-Type":"application/json"},
+      body:body?JSON.stringify(body):undefined,signal:c.signal});
+    return await r.json();
+  }finally{clearTimeout(t);}
+}
+
+// live view: single-JPEG polling (no persistent stream, so it never eats the
+// browser's connection budget the way an MJPEG stream would)
+function tick(){
+  const img=$("shot");
+  const next=new Image();
+  next.onload=()=>{img.src=next.src;setTimeout(tick,600);};
+  next.onerror=()=>setTimeout(tick,1200);
+  next.src="/api/admin/url/snap?ip="+encodeURIComponent(IP)+"&_="+Date.now();
+}
+tick();
+
+async function act(op,extra){
+  setStatus("working…");
+  const j=await api("/api/admin/url/act",Object.assign({ip:IP,op},extra||{}));
+  if(j.ok){applyState(j.source);setStatus("ready");}
+  else setStatus(j.error||"failed",true);
+}
+function applyState(s){
+  if(!s)return;
+  zoom=s.zoom||1;
+  $("zoomLbl").textContent=Math.round(zoom*100)+"%";
+  if(s.url)$("url").value=s.url;
+  if(s.error)setStatus(s.error,true);
+}
+function zoomBy(f){setZoom(zoom*f);}
+function setZoom(z){act("zoom",{zoom:Math.max(.25,Math.min(z,4))});}
+function go(){const u=$("url").value.trim();if(u)act("goto",{url:u});}
+function typeText(){const t=$("typing").value;if(!t)return;
+  act("type",{text:t});$("typing").value="";}
+
+// map a click on the displayed image to page coordinates
+function clickAt(e){
+  const img=$("shot");
+  const r=img.getBoundingClientRect();
+  const sx=1920/r.width, sy=1080/r.height;
+  act("click",{x:Math.round((e.clientX-r.left)*sx),
+               y:Math.round((e.clientY-r.top)*sy)});
+}
+
+async function commit(){
+  setStatus("saving view and starting the stream…");
+  const j=await api("/api/admin/url/commit",{ip:IP});
+  if(j.ok){setStatus("streaming to the TV ✓");
+    setTimeout(()=>window.close(),900);}
+  else setStatus(j.error||"failed",true);
+}
+
+async function signin(){
+  const j=await api("/api/admin/url/signin",{ip:IP});
+  setStatus(j.ok?j.note:(j.error||"failed"),!j.ok);
+}
+
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT")return;
+  if(e.key==="PageDown")act("scroll",{dy:600});
+  if(e.key==="PageUp")act("scroll",{dy:-600});
+});
+act("state");
+</script>
+</body></html>

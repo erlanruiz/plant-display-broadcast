@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plant Display</title>
+<style>
+  html,body{margin:0;height:100%;background:#07090d;color:#e8edf4;
+    font-family:"Segoe UI",Arial,sans-serif;overflow:hidden}
+  .center{height:100%;display:flex;align-items:center;justify-content:center;
+    flex-direction:column}
+  .brand{font-size:18px;letter-spacing:6px;color:#5d6b7e;text-transform:uppercase;
+    margin-bottom:28px}
+  .brand b{color:#ffb454}
+  .card{background:#10141b;border:1px solid #1f2733;border-radius:14px;
+    padding:40px 48px;text-align:center;max-width:560px}
+  .card h1{font-size:26px;margin:0 0 8px;font-weight:600}
+  .card p{color:#8b99ac;margin:0 0 24px;font-size:15px}
+  input[type=password]{font-size:30px;letter-spacing:8px;text-align:center;
+    background:#07090d;color:#fff;border:2px solid #2a3545;border-radius:10px;
+    padding:14px 18px;width:280px;outline:none}
+  input[type=password]:focus{border-color:#ffb454}
+  button{font-size:18px;background:#ffb454;color:#1a1408;border:0;
+    border-radius:10px;padding:14px 36px;margin-top:22px;cursor:pointer;
+    font-weight:600}
+  button:focus{outline:3px solid #fff}
+  .err{color:#ff6b6b;height:22px;margin-top:14px;font-size:15px}
+  /* channel picker */
+  .grid{display:flex;flex-wrap:wrap;gap:18px;justify-content:center;
+    max-width:1100px;padding:20px}
+  .tile{background:#10141b;border:2px solid #1f2733;border-radius:12px;
+    padding:26px 30px;font-size:20px;cursor:pointer;min-width:240px;
+    text-align:center}
+  .tile:hover,.tile:focus{border-color:#ffb454;outline:none}
+  .tile small{display:block;color:#8b99ac;margin-top:6px;font-size:13px}
+  /* stream */
+  #screen{position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;
+    background:#000;display:none}
+  #hud{position:fixed;top:14px;right:18px;background:rgba(7,9,13,.7);
+    border:1px solid #2a3545;border-radius:8px;padding:6px 14px;font-size:13px;
+    color:#8b99ac;display:none}
+  #hud b{color:#ffb454}
+</style>
+</head>
+<body>
+
+<div id="loginView" class="center">
+  <div class="brand">plant<b>display</b></div>
+  <div class="card">
+    <h1>Enter the password</h1>
+    <p>Ask the person at the computer for the Plant Display password.</p>
+    <input id="pwd" type="password" autocomplete="off" autofocus>
+    <br>
+    <button id="goBtn" onclick="doLogin()">Connect</button>
+    <div id="loginErr" class="err"></div>
+  </div>
+</div>
+
+<div id="pickView" class="center" style="display:none">
+  <div class="brand">plant<b>display</b> &middot; choose a source</div>
+  <div id="pickGrid" class="grid"></div>
+</div>
+
+<img id="screen" alt="">
+<div id="hud">LIVE &middot; <b id="hudName"></b></div>
+
+<script>
+function $(id){return document.getElementById(id);}
+var URLTOKEN=(location.search.match(/[?&]token=([^&]+)/)||[])[1]||null;
+function api(method,url,body,cb){
+  if(URLTOKEN)url+=(url.indexOf("?")===-1?"?":"&")+"token="+URLTOKEN;
+  var x=new XMLHttpRequest();
+  x.open(method,url,true);
+  x.setRequestHeader("Content-Type","application/json");
+  x.onreadystatechange=function(){
+    if(x.readyState===4){
+      var j=null; try{j=JSON.parse(x.responseText);}catch(e){}
+      cb(x.status,j);
+    }
+  };
+  x.send(body?JSON.stringify(body):null);
+}
+
+var TOKEN=null, lastAssigned=null, lastReload=null;
+
+// Live source switching + remote reload: every 5 s ask what this TV should be
+// playing and whether the admin pressed Open viewer (reload signal).
+setInterval(function(){
+  api("GET","/api/me",null,function(st,j){
+    if(st!==200||!j||!j.authed)return;
+    if(lastReload!==null && j.reload!==lastReload){location.reload();return;}
+    lastReload=j.reload;
+    if(j.assigned!==lastAssigned){
+      lastAssigned=j.assigned;
+      if(j.assigned)play(j.assigned,j.assigned);
+    }
+  });
+},5000);
+
+function doLogin(){
+  var p=$("pwd").value;
+  api("POST","/api/login",{password:p},function(st,j){
+    if(st===200&&j&&j.ok){TOKEN=j.token;afterAuth();}
+    else{$("loginErr").textContent="Wrong password — try again";
+         $("pwd").value="";$("pwd").focus();}
+  });
+}
+$("pwd").addEventListener("keydown",function(e){
+  if(e.keyCode===13)doLogin();
+});
+
+function afterAuth(){
+  $("loginView").style.display="none";
+  api("GET","/api/me",null,function(st,j){
+    if(st===200&&j){lastReload=j.reload;}
+    if(st===200&&j&&j.assigned){lastAssigned=j.assigned;play(j.assigned,j.assigned);}
+    else{showPicker();}
+  });
+}
+
+function showPicker(){
+  api("GET","/api/channels",null,function(st,j){
+    if(st!==200||!j)return;
+    var g=$("pickGrid");g.innerHTML="";
+    var items=[];
+    var i;
+    for(i=0;i<j.monitors.length;i++)
+      items.push({id:j.monitors[i].id,label:j.monitors[i].label,sub:"Display"});
+    for(i=0;i<j.windows.length;i++)
+      items.push({id:j.windows[i].id,label:j.windows[i].label,sub:"Window"});
+    for(i=0;i<items.length;i++){
+      (function(it){
+        var d=document.createElement("div");
+        d.className="tile";d.tabIndex=0;
+        d.innerHTML=it.label+"<small>"+it.sub+"</small>";
+        d.onclick=function(){play(it.id,it.label);};
+        d.onkeydown=function(e){if(e.keyCode===13)play(it.id,it.label);};
+        g.appendChild(d);
+      })(items[i]);
+    }
+    $("pickView").style.display="flex";
+  });
+}
+
+var currentChannel=null, mode="mjpeg", firstFrame=false, fallbackTimer=null;
+function streamUrl(){return "/stream/"+currentChannel+"?token="+
+  encodeURIComponent(TOKEN)+"&_="+Date.now();}
+function frameUrl(){return "/frame/"+currentChannel+"?token="+
+  encodeURIComponent(TOKEN)+"&_="+Date.now();}
+
+function play(channel,label){
+  currentChannel=channel;mode="mjpeg";firstFrame=false;
+  $("pickView").style.display="none";
+  var img=$("screen");
+  img.style.display="block";
+  $("hud").style.display="block";
+  $("hudName").textContent=label||channel;
+  setTimeout(function(){$("hud").style.display="none";},6000);
+
+  img.onload=function(){
+    if(mode==="mjpeg"){firstFrame=true;}
+    else{setTimeout(nextSnapshot,120);}   // ~8 fps polling
+  };
+  img.onerror=function(){
+    setTimeout(function(){
+      if(!currentChannel)return;
+      if(mode==="mjpeg")img.src=streamUrl();
+      else nextSnapshot();
+    },1500);
+  };
+  img.src=streamUrl();
+
+  // Older TV browsers can't render multipart MJPEG: if no frame appears
+  // within 8 s, switch to JPEG snapshot polling (works everywhere).
+  clearTimeout(fallbackTimer);
+  fallbackTimer=setTimeout(function(){
+    if(!firstFrame&&mode==="mjpeg"){
+      mode="snapshot";
+      nextSnapshot();
+    }
+  },8000);
+}
+function nextSnapshot(){
+  if(!currentChannel||mode!=="snapshot")return;
+  $("screen").src=frameUrl();
+}
+
+// If a cookie session exists or a token came in the URL, skip the password.
+api("GET","/api/me",null,function(st,j){
+  if(st===200&&j&&j.authed){
+    TOKEN=URLTOKEN||(document.cookie.match(/sb_token=([^;]+)/)||[])[1]||"";
+    lastAssigned=j.assigned||null;
+    lastReload=j.reload;
+    if(j.assigned)play(j.assigned,j.assigned);else showPicker();
+    $("loginView").style.display="none";
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+========================================================================
+  Plant Display — START HERE
+========================================================================
+
+This single folder is the complete Plant Display system. You can copy it to any
+Windows 11 PC (or Hyper-V VM) and run it. Nothing else is needed from the
+original account — the code, installer, and all documentation are here.
+
+WHAT TO READ, IN ORDER:
+
+  1. INSTALL_GUIDE.md .... How to install and run from scratch. START HERE.
+  2. README.md ........... Every feature explained, section by section.
+  3. PROJECT_HISTORY.md .. What was built and WHY (design + security notes).
+  4. VIRTUAL_DISPLAY_SETUP.md . Optional: the rock-solid way to broadcast
+                                live browser/PowerPoint content.
+
+TO INSTALL (short version):
+
+  1. Copy this whole folder to the PC, e.g. C:\plantdisplay
+  2. Double-click  INSTALL.bat  (approve the admin prompt)
+  3. Double-click  run.bat
+  4. Open the admin URL it prints, e.g.  http://<PC-IP>:8090/admin
+  5. Change both passwords in  config.json
+
+WHAT THIS SYSTEM DOES:
+
+  Broadcasts a Windows PC's displays, individual windows, or live web pages
+  to multiple TVs (Samsung, Hisense, any TV with a browser) and to
+  Chromecasts, all managed from a web control room. Includes TV power/remote
+  control, auto-reconnect, per-TV virtual browsers with persistent sign-ins,
+  and a one-click Remote Desktop button.
+
+STATE / BACKUP:
+
+  After setup, these three items hold your entire configuration — copy them
+  to migrate to another machine:
+     config.json , viewer_tokens.json , tv_tokens\
+
+========================================================================

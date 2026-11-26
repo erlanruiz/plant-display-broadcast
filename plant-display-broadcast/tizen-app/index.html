@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Plant Display</title>
+<style>
+  html,body{margin:0;height:100%;background:#07090d;color:#e8edf4;
+    font-family:Arial,sans-serif;overflow:hidden}
+  .center{height:100%;display:flex;align-items:center;justify-content:center;
+    flex-direction:column}
+  .brand{font-size:20px;letter-spacing:6px;color:#5d6b7e;margin-bottom:30px}
+  .brand b{color:#ffb454}
+  input{font-size:32px;text-align:center;background:#10141b;color:#fff;
+    border:2px solid #2a3545;border-radius:10px;padding:14px;width:420px}
+  input:focus{border-color:#ffb454;outline:none}
+  button{font-size:20px;background:#ffb454;color:#1a1408;border:0;
+    border-radius:10px;padding:14px 40px;margin-top:24px;font-weight:bold}
+  button:focus{outline:3px solid #fff}
+  p{color:#8b99ac}
+  iframe{position:fixed;inset:0;width:100vw;height:100vh;border:0;display:none}
+</style>
+</head>
+<body>
+<div class="center" id="setup">
+  <div class="brand">SCREEN<b>BEAM</b></div>
+  <p>Enter the IP address of the computer running Plant Display</p>
+  <input id="ip" placeholder="PC-IP:8090">
+  <button onclick="go()">Connect</button>
+</div>
+<iframe id="frame"></iframe>
+<script>
+function go(){
+  var v=document.getElementById("ip").value.trim();
+  if(!v)return;
+  if(v.indexOf(":")===-1)v+=":8090";
+  try{localStorage.setItem("sb_server",v);}catch(e){}
+  var f=document.getElementById("frame");
+  f.src="http://"+v+"/";
+  f.style.display="block";
+  document.getElementById("setup").style.display="none";
+}
+document.getElementById("ip").addEventListener("keydown",function(e){
+  if(e.keyCode===13)go();
+});
+// Red button on the remote (keycode 403) clears the saved server.
+document.addEventListener("keydown",function(e){
+  if(e.keyCode===403){try{localStorage.removeItem("sb_server");}catch(x){}
+    location.reload();}
+});
+try{
+  var saved=localStorage.getItem("sb_server");
+  if(saved){document.getElementById("ip").value=saved;go();}
+}catch(e){}
+</script>
+</body>
+</html>

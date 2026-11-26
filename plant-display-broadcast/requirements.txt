@@ -1,0 +1,10 @@
+flask>=3.0
+pillow>=10.0
+mss>=9.0
+pychromecast>=14.0
+pywin32>=306; sys_platform == 'win32'
+samsungtvws>=2.6,<3
+websocket-client>=1.6
+requests>=2.31
+paho-mqtt>=1.6
+playwright>=1.40
